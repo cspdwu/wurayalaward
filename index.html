@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WU Royal Award System</title>
+  
+  <!-- Fonts: Sarabun -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- SweetAlert2 -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  
+  <!-- React & Babel -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style type="text/tailwindcss">
+    body { font-family: 'Sarabun', sans-serif; background-color: #f3f4f6; }
+    
+    .btn-primary { 
+      @apply bg-purple-700 hover:bg-purple-800 text-white font-medium py-2 px-4 rounded transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed; 
+    }
+    
+    .btn-secondary { 
+      @apply bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded transition-colors; 
+    }
+    
+    .input-field { 
+      @apply w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all; 
+    }
+    
+    .card { 
+      @apply bg-white rounded-lg shadow-md p-6 border border-gray-100; 
+    }
+    
+    .error-text { 
+      @apply text-xs text-red-500 mt-1 font-medium; 
+    }
+    
+    .input-error { 
+      @apply border-red-500 ring-1 ring-red-500 bg-red-50; 
+    }
+    
+    .animate-fade-in { 
+      animation: fadeIn 0.3s ease-in-out; 
+    }
+    
+    @keyframes fadeIn { 
+      from { opacity: 0; } 
+      to { opacity: 1; } 
+    }
+    
+    .swal2-popup { 
+      font-family: 'Sarabun', sans-serif !important; 
+    }
+    
+    /* Custom Scrollbar */
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+    const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    
+    // Helper Dates
+    const formatDateForInput = (dateStr) => {
+        if(!dateStr) return '';
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return '';
+        const pad = (n) => n < 10 ? '0'+n : n;
+        return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    };
+
+    // --- PRODUCTION SCRIPT RUNNER ---
+    const runScript = (funcName, ...args) => {
+       return new Promise((resolve, reject) => {
+          if (typeof google === 'undefined' || !google.script) {
+             // Fallback error if run outside Apps Script environment
+             reject(new Error("Google Script Environment not found. Please deploy as Web App."));
+             return;
+          }
+          google.script.run
+            .withSuccessHandler(resolve)
+            .withFailureHandler(e => resolve({status:'error', message: e.message}))
+            [funcName](...args);
+       });
+    };
+
+    // --- ICONS ---
+    const Icon = ({d, c}) => <svg className={`w-5 h-5 ${c || ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={d}></path></svg>;
+    
+    const Icons = {
+      Upload: <Icon d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />,
+      Check: <Icon d="M5 13l4 4L19 7" c="text-green-600" />,
+      Cross: <Icon d="M6 18L18 6M6 6l12 12" c="text-red-600" />,
+      Eye: <Icon d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />,
+      EyeOff: <Icon d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />,
+      User: <Icon d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />,
+      Search: <Icon d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />,
+      Users: <Icon d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />,
+      Building: <Icon d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />,
+      Chart: <Icon d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />,
+      Table: <Icon d="M3 10h18M3 14h18m-9-4v8m-7-4h14M4 6h16a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2z" />,
+      Cog: <Icon d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />,
+      Refresh: <Icon d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />,
+      Clock: <Icon d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    };
+
+    // --- DATA CONSTANTS ---
+    const DOC_LIST = [
+       { section: "1. เอกสารหลัก (คุณสมบัติทั่วไป)", items: [{ id: "doc_cover", name: "หนังสือนำจากสำนักวิชา" }, { id: "doc_nomination", name: "แบบเสนอชื่อนักศึกษา" }, { id: "doc_self_report", name: "แบบรายงานตนเอง (แบบ รายงาน ก.)" }, { id: "doc_appraisal", name: "แบบประเมินคุณลักษณะ (แบบ พร. 1 ก.)" }]},
+       { section: "2. คุณลักษณะพื้นฐาน (5 หมวด)", items: [{ id: "doc_1_1", name: "1.1 หมวดการศึกษาเล่าเรียน" }, { id: "doc_1_2", name: "1.2 หมวดการมีทักษะในการจัดการ" }, { id: "doc_1_3", name: "1.3 หมวดสุขภาพอนามัย" }, { id: "doc_1_4", name: "1.4 หมวดความประพฤติ คุณธรรม" }, { id: "doc_1_5", name: "1.5 หมวดการอนุรักษ์ศิลปวัฒนธรรม" }]},
+       { section: "3. กิจกรรม/ผลงานดีเด่น", items: [{ id: "doc_2_1", name: "2.1 เอกสารอ้างอิงชุดที่ 1" }, { id: "doc_2_2", name: "2.2 เอกสารอ้างอิงชุดที่ 2" }, { id: "doc_2_3", name: "2.3 เอกสารอ้างอิงชุดที่ 3" }, { id: "doc_2_4", name: "2.4 เอกสารอ้างอิงชุดที่ 4" }, { id: "doc_2_5", name: "2.5 เอกสารอ้างอิงชุดที่ 5" }]}
+    ];
+
+    // --- SHARED COMPONENTS ---
+    const InputField = ({ label, value, onChange, placeholder, maxLength, type="text", disabled=false, error, required=false }) => (
+      <div className="mb-2">
+        <label className="block text-sm mb-1 font-medium text-gray-700">
+          {label} {required && <span className="text-red-500">*</span>}
+        </label>
+        <input 
+            type={type}
+            value={value}
+            onChange={onChange}
+            className={`input-field ${error ? 'input-error' : ''} ${disabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+            maxLength={maxLength}
+            placeholder={placeholder}
+            disabled={disabled}
+        />
+        {error && <p className="error-text">{error}</p>}
+      </div>
+    );
+
+    // 1. LOGIN
+    const Login = ({ onLogin }) => {
+       const [u, setU] = useState(''); 
+       const [p, setP] = useState(''); 
+       const [showPass, setShowPass] = useState(false);
+       const [loading, setLoading] = useState(false);
+       
+       const sub = async (e) => { 
+          e.preventDefault(); 
+          setLoading(true);
+          const res = await runScript('apiLogin', u.trim(), p.trim()); 
+          setLoading(false); 
+          if (res && res.status === 'success') {
+             Swal.fire({
+                icon: 'success',
+                title: 'เข้าสู่ระบบสำเร็จ',
+                text: 'ยินดีต้อนรับ ' + (res.user.name || res.user.username),
+                timer: 1500,
+                showConfirmButton: false
+             }).then(() => onLogin(res));
+          } else {
+             Swal.fire({ 
+                 icon: 'error', 
+                 title: 'เข้าสู่ระบบไม่สำเร็จ', 
+                 text: res ? res.message : 'ไม่สามารถติดต่อ Server ได้',
+                 confirmButtonText: 'ตกลง'
+             });
+          }
+       };
+
+       return (
+          <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-800 to-indigo-900 p-4">
+             <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-8">
+                <div className="text-center mb-6">
+                    <div className="text-4xl font-bold text-purple-800 mb-2">WU-RAS</div>
+                    <h1 className="text-lg font-bold text-gray-800">ระบบประเมินนักศึกษาเพื่อรับรางวัลพระราชทาน</h1>
+                    <p className="text-sm text-gray-500">รอบสถาบัน (มหาวิทยาลัยวลัยลักษณ์) ปีการศึกษา 2568</p>
+                </div>
+                <form onSubmit={sub} className="space-y-4">
+                   <input className="input-field" value={u} onChange={e=>setU(e.target.value)} required placeholder="รหัสผู้ใช้" />
+                   
+                   <div className="relative">
+                       <input 
+                           type={showPass ? "text" : "password"} 
+                           className="input-field pr-10" 
+                           value={p} 
+                           onChange={e=>setP(e.target.value)} 
+                           required 
+                           placeholder="รหัสผ่าน" 
+                       />
+                       <button 
+                           type="button" 
+                           onClick={() => setShowPass(!showPass)}
+                           className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-purple-700 focus:outline-none"
+                       >
+                           {showPass ? Icons.EyeOff : Icons.Eye}
+                       </button>
+                   </div>
+
+                   <button type="submit" disabled={loading} className="w-full bg-purple-700 hover:bg-purple-800 text-white font-bold py-2.5 rounded shadow flex justify-center items-center gap-2">
+                       {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>}
+                       เข้าสู่ระบบ
+                   </button>
+                </form>
+             </div>
+          </div>
+       );
+    };
+
+    // 2. NOMINATOR (สำนักวิชา)
+    const NominatorView = ({ user, canEdit, systemMessage }) => {
+       const [loading, setLoading] = useState(false);
+       const [formData, setFormData] = useState({ intent: 'nominate', reasonDecline: '', studentId: '', studentName: '', curriculum: '', email: '', phone: '', advisorName: '', advisorPhone: '', advisorEmail: '', files: {} });
+       const [errors, setErrors] = useState({});
+       const [hasSubmitted, setHasSubmitted] = useState(false);
+       const [step, setStep] = useState(1);
+
+       useEffect(() => {
+          Swal.fire({ title: 'กำลังโหลดข้อมูล...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+          runScript('apiGetNominatorData', user.department).then(res => {
+             Swal.close();
+             if (res.status === 'success' && res.data && (res.data.studentId || res.data.intent)) {
+                const d = res.data;
+                const files = {};
+                DOC_LIST.forEach(g => g.items.forEach(doc => { if(d[doc.id]) files[doc.id] = d[doc.id]; }));
+                setFormData(p => ({ ...p, ...d, files, intent: d.intent || 'nominate' }));
+                if (d.intent) {
+                    setHasSubmitted(true);
+                    setStep('dashboard'); 
+                }
+             }
+          });
+       }, []);
+
+       const handleFileChange = async (e, docId) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          if (file.size > 10 * 1024 * 1024) return Swal.fire('ขนาดไฟล์เกิน', 'ไฟล์ต้องมีขนาดไม่เกิน 10MB', 'warning');
+          
+          Swal.fire({ title: 'กำลังอัพโหลด...', text: 'กรุณารอสักครู่', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+          
+          const reader = new FileReader();
+          reader.onload = async (evt) => {
+             const res = await runScript('apiUploadFile', evt.target.result, `${docId}_${user.department}.pdf`, user.department);
+             if (res.status === 'success') {
+                setFormData(p => ({ ...p, files: { ...p.files, [docId]: res.url } }));
+                Swal.fire({ icon: 'success', title: 'อัพโหลดสำเร็จ', timer: 1000, showConfirmButton: false });
+             } else {
+                Swal.fire('อัพโหลดล้มเหลว', res.message, 'error');
+             }
+          };
+          reader.readAsDataURL(file);
+       };
+
+       const validateStep = (s) => {
+          let errs = {}; let valid = true; const req = (val) => val && String(val).trim().length > 0;
+          if (s === 1 && formData.intent === 'decline' && !req(formData.reasonDecline)) { errs.reasonDecline = 'กรุณาระบุเหตุผลการสละสิทธิ์'; valid = false; }
+          if (s === 2) {
+             if (!/^\d{8}$/.test(formData.studentId)) { errs.studentId = 'รหัสนักศึกษาต้องเป็นตัวเลข 8 หลัก'; valid = false; }
+             if (!req(formData.studentName)) { errs.studentName = 'ระบุชื่อ-นามสกุล'; valid = false; }
+             if (!req(formData.curriculum)) { errs.curriculum = 'ระบุหลักสูตร'; valid = false; }
+             if (!EMAIL_REGEX.test((formData.email || '').trim())) { errs.email = 'รูปแบบอีเมลไม่ถูกต้อง'; valid = false; }
+             if (!/^\d{10}$/.test(formData.phone)) { errs.phone = 'เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลัก'; valid = false; }
+          }
+          if (s === 4) {
+             if (!req(formData.advisorName)) { errs.advisorName = 'ระบุชื่ออาจารย์'; valid = false; }
+             if (!/^\d{10}$/.test(formData.advisorPhone)) { errs.advisorPhone = 'เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลัก'; valid = false; }
+             if (!EMAIL_REGEX.test((formData.advisorEmail || '').trim())) { errs.advisorEmail = 'รูปแบบอีเมลไม่ถูกต้อง'; valid = false; }
+          }
+          if (!valid) { setErrors(errs); window.scrollTo({ top: 0, behavior: 'smooth' }); } else setErrors({});
+          return valid;
+       };
+
+       const handleNext = () => {
+          if (validateStep(step)) { setStep(s => s + 1); } 
+          else { Swal.fire({ icon: 'warning', title: 'ข้อมูลไม่ครบถ้วน', text: 'กรุณากรอกข้อมูลในช่องที่มีสีแดงให้ถูกต้อง', confirmButtonText: 'ตกลง' }); }
+       };
+
+       const handleSubmit = async (e) => {
+          if (e) e.preventDefault();
+          const checkStep = formData.intent === 'decline' ? 1 : 4;
+          if (!validateStep(checkStep)) return Swal.fire({ icon: 'warning', title: 'ข้อมูลไม่ครบถ้วน', text: 'กรุณากรอกข้อมูลในช่องที่มีสีแดงให้ถูกต้อง', confirmButtonText: 'ตกลง' });
+          
+          const confirm = await Swal.fire({
+             title: 'ยืนยันการบันทึกข้อมูล?',
+             text: "หากบันทึกแล้วท่านสามารถแก้ไขได้จนกว่าจะปิดระบบ",
+             icon: 'question',
+             showCancelButton: true,
+             confirmButtonText: 'ยืนยันบันทึก',
+             cancelButtonText: 'ยกเลิก',
+             confirmButtonColor: '#16a34a',
+             cancelButtonColor: '#d33'
+          });
+
+          if (!confirm.isConfirmed) return;
+          
+          Swal.fire({ title: 'กำลังบันทึกข้อมูล...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+          
+          const payload = { ...formData };
+          DOC_LIST.forEach(g => g.items.forEach(doc => { payload[doc.id] = formData.files[doc.id] || ""; }));
+          
+          const res = await runScript('apiSaveCandidate', payload, user.role, user.department);
+          
+          if (res.status === 'success') { 
+             Swal.fire({ icon: 'success', title: 'บันทึกข้อมูลเรียบร้อย', timer: 1500, showConfirmButton: false })
+                 .then(() => { setHasSubmitted(true); setStep('dashboard'); });
+          } else {
+             Swal.fire({ icon: 'error', title: 'บันทึกไม่สำเร็จ', text: res.message, confirmButtonText: 'ตกลง' });
+          }
+       };
+
+       const onTextChange = (key, val, isNumeric=false) => {
+          if (isNumeric && !/^\d*$/.test(val)) return;
+          setFormData(prev => ({...prev, [key]: val}));
+          if (errors[key]) setErrors(prev => ({...prev, [key]: null}));
+       };
+
+       const renderFileUpload = (docId, label) => {
+          const isUploaded = !!formData.files[docId];
+          return (
+            <div className={`flex items-center justify-between p-3 border rounded-lg mb-2 transition-all ${isUploaded ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200 hover:bg-white'}`}>
+               <div className="flex-1 pr-4">
+                  <div className={`text-sm font-medium ${isUploaded ? 'text-green-700' : 'text-gray-700'}`}>
+                      {label}
+                      {isUploaded && <span className="ml-2 text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded-full inline-flex items-center gap-1">{Icons.Check} อัพโหลดแล้ว</span>}
+                  </div>
+                  {isUploaded && <a href={formData.files[docId]} target="_blank" className="text-xs text-green-600 flex items-center gap-1 mt-1 font-bold hover:underline">{Icons.Eye} ดูเอกสาร</a>}
+               </div>
+               {canEdit ? (
+                  <label className={`cursor-pointer border px-3 py-1.5 rounded-md text-sm flex items-center gap-2 shadow-sm transition-all ${isUploaded ? 'bg-white border-green-300 text-green-700 hover:bg-green-100' : 'bg-white border-gray-300 hover:bg-purple-50 hover:border-purple-300 text-gray-700'}`}>
+                     {Icons.Upload} {isUploaded ? 'เปลี่ยนไฟล์' : 'อัพโหลด'}
+                     <input type="file" className="hidden" accept="application/pdf" onChange={(e) => handleFileChange(e, docId)} />
+                  </label>
+               ) : (
+                  <span className="text-xs text-gray-400">ปิดการแก้ไข</span>
+               )}
+            </div>
+          );
+       };
+
+       if (hasSubmitted && (!canEdit || step === 'dashboard')) {
+          const totalDocs = DOC_LIST.reduce((acc, g) => acc + g.items.length, 0);
+          const uploadedDocs = Object.keys(formData.files).length;
+
+          return (
+             <div className="space-y-6 animate-fade-in">
+                <div className={`p-4 rounded border-l-4 shadow-sm ${formData.intent==='nominate'?'bg-green-50 border-green-500':'bg-red-50 border-red-500'}`}>
+                   <h2 className="text-xl font-bold text-gray-800">{formData.intent==='nominate' ? 'เสนอชื่อนักศึกษาเรียบร้อยแล้ว' : 'แจ้งความประสงค์สละสิทธิ์'}</h2>
+                   <p className="text-sm text-gray-600 mt-1">{user.department}</p>
+                   {formData.intent==='decline' && <p className="text-sm mt-3 p-2 bg-white rounded border"><strong>เหตุผล:</strong> {formData.reasonDecline}</p>}
+                </div>
+                {formData.intent === 'nominate' && (
+                  <div className="grid md:grid-cols-2 gap-6">
+                     <div className="card">
+                        <h3 className="font-bold text-lg mb-4 text-purple-800 border-b pb-2 flex items-center gap-2">{Icons.User} ข้อมูลนักศึกษา</h3>
+                        <div className="space-y-2 text-sm text-gray-700">
+                            <p><span className="font-bold">รหัสนักศึกษา:</span> {formData.studentId}</p>
+                            <p><span className="font-bold">ชื่อ-สกุล:</span> {formData.studentName}</p>
+                            <p><span className="font-bold">หลักสูตร:</span> {formData.curriculum}</p>
+                            <hr className="my-2"/>
+                            <p><span className="font-bold">อาจารย์พี่เลี้ยง:</span> {formData.advisorName}</p>
+                        </div>
+                     </div>
+                     <div className="card">
+                        <h3 className="font-bold text-lg mb-4 text-purple-800 border-b pb-2 flex items-center gap-2">
+                            {Icons.Check} เอกสารแนบ ({uploadedDocs}/{totalDocs})
+                        </h3>
+                        <div className="space-y-2 h-64 overflow-y-auto pr-2 custom-scrollbar">
+                           {DOC_LIST.map(g => g.items.map(d => {
+                                const isUploaded = !!formData.files[d.id];
+                                return (
+                                    <div key={d.id} className={`text-sm flex justify-between items-center p-2 rounded border ${isUploaded ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                                        <div className="flex gap-2 items-center">
+                                            <div className="mt-0.5">{isUploaded ? Icons.Check : Icons.Cross}</div> 
+                                            <span className={`font-medium ${isUploaded ? 'text-green-800' : 'text-red-800'}`}>{d.name}</span>
+                                        </div>
+                                        {isUploaded && (
+                                            <a href={formData.files[d.id]} target="_blank" className="text-xs text-green-600 flex items-center gap-1 font-bold hover:underline bg-white px-2 py-1 rounded border border-green-200 shadow-sm">
+                                                {Icons.Eye} ดูไฟล์
+                                            </a>
+                                        )}
+                                    </div>
+                                );
+                           }))}
+                        </div>
+                     </div>
+                  </div>
+                )}
+                {canEdit && <div className="text-center mt-6"><button onClick={() => { setStep(1); setHasSubmitted(false); }} className="btn-primary bg-yellow-600 hover:bg-yellow-700">แก้ไขข้อมูล</button></div>}
+             </div>
+          );
+       }
+
+       return (
+          <div className="card max-w-4xl mx-auto">
+             {!canEdit && <div className="bg-red-100 text-red-800 p-3 rounded mb-4 text-center font-bold shadow-sm">{systemMessage}</div>}
+             
+             {/* Progress */}
+             <div className="flex justify-between mb-8 text-sm font-medium text-gray-500 border-b pb-4 px-2">
+                {[1,2,3,4].map(s => <div key={s} className={`cursor-pointer px-2 py-1 rounded transition-colors ${step===s ? 'text-white bg-purple-700 font-bold shadow' : 'hover:bg-gray-100'}`} onClick={() => { if(step > s) setStep(s); }}>ส่วนที่ {s}</div>)}
+             </div>
+
+             {step === 1 && (
+                <div className="space-y-4 animate-fade-in">
+                   <h3 className="text-xl font-bold mb-4 text-gray-800 border-l-4 border-purple-700 pl-3">ส่วนที่ 1: แจ้งความประสงค์</h3>
+                   <div className="space-y-3">
+                      <label className={`flex items-center gap-3 p-4 border rounded-lg cursor-pointer transition-all ${formData.intent==='nominate' ? 'bg-purple-50 border-purple-300 shadow-sm' : 'hover:bg-gray-50'}`}>
+                         <input type="radio" checked={formData.intent==='nominate'} onChange={() => { setFormData(p=>({...p, intent:'nominate'})); setErrors({}); }} className="w-5 h-5 text-purple-600 accent-purple-700" /> 
+                         <span className="font-medium">ประสงค์เสนอชื่อนักศึกษา</span>
+                      </label>
+                      <label className={`flex items-center gap-3 p-4 border rounded-lg cursor-pointer transition-all ${formData.intent==='decline' ? 'bg-red-50 border-red-300 shadow-sm' : 'hover:bg-gray-50'}`}>
+                         <input type="radio" checked={formData.intent==='decline'} onChange={() => { setFormData(p=>({...p, intent:'decline'})); setErrors({}); }} className="w-5 h-5 text-red-600 accent-red-600" /> 
+                         <span className="font-medium text-red-700">ไม่ประสงค์เสนอชื่อ (สละสิทธิ์)</span>
+                      </label>
+                      {formData.intent === 'decline' && (
+                         <div className="pl-8">
+                            <label className="block text-sm mb-1 font-bold text-gray-700">ระบุเหตุผล <span className="text-red-500">*</span></label>
+                            <textarea 
+                                className={`input-field mt-1 ${errors.reasonDecline?'input-error':''}`} 
+                                placeholder="เช่น ไม่มีนักศึกษาที่มีคุณสมบัติครบถ้วน..." 
+                                value={formData.reasonDecline} 
+                                onChange={e => onTextChange('reasonDecline', e.target.value)} 
+                                rows="3"
+                            />
+                            {errors.reasonDecline && <p className="error-text">{errors.reasonDecline}</p>}
+                         </div>
+                      )}
+                   </div>
+                </div>
+             )}
+
+             {step === 2 && formData.intent === 'nominate' && (
+                <div className="space-y-4 animate-fade-in">
+                   <h3 className="text-xl font-bold mb-4 text-gray-800 border-l-4 border-purple-700 pl-3">ส่วนที่ 2: ข้อมูลนักศึกษา</h3>
+                   <div className="grid md:grid-cols-2 gap-6">
+                      <InputField label="รหัสนักศึกษา (8 หลัก)" value={formData.studentId} onChange={e=>onTextChange('studentId',e.target.value, true)} maxLength="8" placeholder="เฉพาะตัวเลข" error={errors.studentId} required />
+                      <InputField label="ชื่อ-นามสกุล" value={formData.studentName} onChange={e=>onTextChange('studentName',e.target.value)} maxLength="255" error={errors.studentName} required />
+                      <div><label className="block text-sm mb-1 font-medium text-gray-700">สำนักวิชา</label><input value={user.department} disabled className="input-field bg-gray-100 text-gray-500 cursor-not-allowed"/></div>
+                      <InputField label="หลักสูตร" value={formData.curriculum} onChange={e=>onTextChange('curriculum',e.target.value)} maxLength="255" error={errors.curriculum} required />
+                      <InputField label="อีเมล" value={formData.email} onChange={e=>onTextChange('email',e.target.value)} placeholder="เช่น student@wu.ac.th" error={errors.email} required />
+                      <InputField label="เบอร์โทรศัพท์ (10 หลัก)" value={formData.phone} onChange={e=>onTextChange('phone',e.target.value, true)} maxLength="10" placeholder="เฉพาะตัวเลข" error={errors.phone} required />
+                   </div>
+                </div>
+             )}
+
+             {step === 3 && formData.intent === 'nominate' && (
+                <div className="space-y-6 animate-fade-in">
+                   <h3 className="text-xl font-bold mb-2 text-gray-800 border-l-4 border-purple-700 pl-3 flex items-baseline gap-2">
+                       ส่วนที่ 3: เอกสารแนบ (PDF) 
+                       <span className="text-gray-400 font-light text-sm italic normal-case">- ขนาดไม่เกินไฟล์ละ 10 MB</span>
+                   </h3>
+                   {DOC_LIST.map((g, i) => (
+                      <div key={i} className="bg-gray-50 p-4 rounded-lg border shadow-sm">
+                         <h4 className="font-bold text-purple-800 mb-3 border-b border-gray-200 pb-1">{g.section}</h4>
+                         {g.items.map(d => renderFileUpload(d.id, d.name))}
+                      </div>
+                   ))}
+                </div>
+             )}
+
+             {step === 4 && formData.intent === 'nominate' && (
+                <div className="space-y-4 animate-fade-in">
+                   <h3 className="text-xl font-bold mb-4 text-gray-800 border-l-4 border-purple-700 pl-3">ส่วนที่ 4: ข้อมูลอาจารย์พี่เลี้ยง</h3>
+                   <div className="grid md:grid-cols-2 gap-6">
+                      <InputField label="ชื่อ-นามสกุล" value={formData.advisorName} onChange={e=>onTextChange('advisorName',e.target.value)} maxLength="255" error={errors.advisorName} required />
+                      <div><label className="block text-sm mb-1 font-medium text-gray-700">สำนักวิชา</label><input value={user.department} disabled className="input-field bg-gray-100 text-gray-500 cursor-not-allowed"/></div>
+                      <InputField label="เบอร์โทรศัพท์ (10 หลัก)" value={formData.advisorPhone} onChange={e=>onTextChange('advisorPhone',e.target.value, true)} maxLength="10" placeholder="เฉพาะตัวเลข" error={errors.advisorPhone} required />
+                      <InputField label="อีเมล" value={formData.advisorEmail} onChange={e=>onTextChange('advisorEmail',e.target.value)} placeholder="เช่น advisor@wu.ac.th" error={errors.advisorEmail} required />
+                   </div>
+                </div>
+             )}
+
+             <div className="flex justify-between mt-8 pt-6 border-t">
+                {step > 1 && <button onClick={() => setStep(s => s-1)} className="btn-secondary">ย้อนกลับ</button>}
+                <div className="flex-1"></div>
+                
+                {step < 4 && formData.intent === 'nominate' && <button onClick={handleNext} className="btn-primary">ถัดไป</button>}
+                
+                {((step === 4 && formData.intent === 'nominate') || (step === 1 && formData.intent === 'decline')) && canEdit && (
+                   <button type="button" onClick={handleSubmit} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 px-8 rounded shadow-lg flex items-center gap-2 transform hover:scale-105 transition-transform">
+                      ยืนยันบันทึกข้อมูล
+                   </button>
+                )}
+             </div>
+          </div>
+       );
+    };
+
+    // 3. COMMITTEE (กรรมการ)
+    const CommitteeView = ({ user }) => {
+       const [cands, setCands] = useState([]);
+       const [sel, setSel] = useState(null);
+       const [rev, setRev] = useState({ obs1: '', obs2: '', obs3: '', summary: '' });
+
+       const fetchCandidates = () => {
+          Swal.fire({ title: 'กำลังโหลดข้อมูล...', didOpen: () => Swal.showLoading() });
+          runScript('apiGetCommitteeData', user.name).then(res => {
+             Swal.close();
+             if (res.status === 'success') setCands(res.candidates || []);
+          });
+       };
+
+       useEffect(() => { fetchCandidates(); }, []);
+
+       const saveReview = async () => {
+          Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
+          const payload = { ...rev, studentId: sel.studentId, studentName: sel.studentName, department: sel.department };
+          const res = await runScript('apiSaveReview', payload, user.name);
+          if (res.status === 'success') {
+             Swal.fire('สำเร็จ', 'บันทึกผลการพิจารณาเรียบร้อย', 'success');
+             setSel(null);
+             fetchCandidates(); 
+          } else {
+             Swal.fire('เกิดข้อผิดพลาด', res.message, 'error');
+          }
+       };
+
+       if (!sel) return <div className="max-w-6xl mx-auto space-y-6"><h2 className="text-2xl font-bold text-gray-800 border-b pb-4">รายชื่อนักศึกษา</h2><div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{cands.map((c,i)=><div key={i} className={`bg-white rounded-xl shadow-md p-5 border-l-4 hover:-translate-y-1 transition ${c.intent==='decline'?'border-red-500':(c.reviewStatus==='reviewed'?'border-green-500':'border-yellow-500')}`}><div className="flex justify-between items-start mb-3"><span className="text-sm font-bold text-gray-500 uppercase tracking-wide">{c.department}</span>{c.intent !== 'decline' && (c.reviewStatus==='reviewed' ? <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full flex gap-1 items-center">{Icons.Check} ตรวจแล้ว</span> : <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full flex gap-1 items-center">{Icons.Clock} รอพิจารณา</span>)}</div><h3 className="font-bold text-lg text-gray-800">{c.studentName||'ไม่ประสงค์เสนอชื่อ'}</h3>{c.intent==='nominate'&&<p className="text-sm text-gray-600 mt-1">{c.curriculum}</p>}<div className="mt-4 pt-4 border-t">{c.intent==='nominate'?<button onClick={()=>setSel(c)} className="text-white bg-purple-700 hover:bg-purple-800 px-4 py-2 rounded-lg text-sm font-bold w-full transition-colors flex justify-center items-center gap-2">{Icons.Search} ตรวจสอบข้อมูล</button>:<span className="text-red-600 text-sm font-medium w-full text-center bg-red-50 py-2 rounded">สละสิทธิ์</span>}</div></div>)}{cands.length===0&&<div className="col-span-full text-center py-12 text-gray-500">ยังไม่มีข้อมูลการเสนอชื่อเข้ามาในระบบ</div>}</div></div>;
+
+       return (
+          <div className="max-w-7xl mx-auto bg-white rounded-xl shadow-lg overflow-hidden flex flex-col min-h-screen">
+             <div className="bg-purple-800 text-white p-4 flex justify-between items-center shrink-0 sticky top-0 z-20"><div><h2 className="text-xl font-bold flex items-center gap-2">{Icons.User} {sel.studentName}</h2><p className="text-sm text-purple-200">{sel.department} | {sel.curriculum}</p></div><button onClick={()=>setSel(null)} className="text-purple-100 hover:text-white bg-purple-700 px-3 py-1 rounded transition">ปิดหน้าต่าง</button></div>
+             <div className="p-6 bg-gray-50 overflow-y-auto">
+                <div className="grid md:grid-cols-2 gap-6 mb-8"><div className="bg-white p-5 rounded-lg shadow-sm border"><h3 className="font-bold text-gray-800 border-b pb-2 mb-3 text-lg">ข้อมูลนักศึกษา</h3><div className="grid md:grid-cols-2 gap-4 text-sm text-gray-600"><p><span className="font-bold text-gray-800">เลขประจำตัว นศ.:</span> {sel.studentId}</p><p><span className="font-bold text-gray-800">เบอร์โทรศัพท์:</span> {sel.phone}</p><p><span className="font-bold text-gray-800">อีเมล:</span> {sel.email}</p><p><span className="font-bold text-gray-800">อาจารย์:</span> {sel.advisorName} ({sel.advisorPhone})</p></div></div><div className="bg-white p-5 rounded-lg shadow-sm border"><h3 className="font-bold text-gray-800 border-b pb-2 mb-3 text-lg">อาจารย์พี่เลี้ยง</h3><div className="space-y-2 text-sm text-gray-600"><p><span className="font-bold text-gray-800 w-24 inline-block">ชื่อ-สกุล:</span> {sel.advisorName}</p><p><span className="font-bold text-gray-800 w-24 inline-block">เบอร์โทรศัพท์:</span> {sel.advisorPhone}</p><p><span className="font-bold text-gray-800 w-24 inline-block">อีเมล:</span> {sel.advisorEmail || '-'}</p></div></div></div>
+                <div className="space-y-8">
+                   {DOC_LIST.map((group, idx) => (
+                      <div key={idx} className="bg-white rounded-lg shadow-sm border overflow-hidden">
+                         <div className="bg-purple-50 px-6 py-4 border-b border-purple-100"><h3 className="font-bold text-lg text-purple-800">{group.section}</h3></div>
+                         <div className="p-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">{group.items.map(d => sel[d.id] ? <a key={d.id} href={sel[d.id]} target="_blank" className="flex items-center gap-2 text-sm text-green-700 bg-green-50 hover:bg-green-100 p-3 rounded border border-green-200 transition group"><div className="bg-white p-1 rounded-full text-green-600 group-hover:text-green-800">{Icons.Eye}</div><span className="truncate font-medium">{d.name}</span></a> : <div key={d.id} className="flex items-center gap-2 text-sm text-gray-400 bg-gray-50 p-3 rounded border border-gray-200 opacity-75"><div className="bg-gray-200 p-1 rounded-full">{Icons.Cross}</div><span className="truncate">{d.name} (ไม่พบไฟล์)</span></div>)}</div>
+                            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200"><label className="block font-bold text-gray-700 mb-2 flex items-center gap-2"><span className="bg-purple-700 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs">{idx + 1}</span> บันทึกข้อสังเกตสำหรับส่วนนี้</label><textarea className="input-field h-24 bg-white focus:ring-purple-500 border-gray-300" placeholder={`บันทึกความคิดเห็นเกี่ยวกับ ${group.section}...`} value={rev[`obs${idx+1}`]} onChange={e=>setRev({...rev, [`obs${idx+1}`]:e.target.value})}></textarea></div>
+                         </div>
+                      </div>
+                   ))}
+                   <div className="bg-white rounded-lg shadow-md border-2 border-green-100 overflow-hidden"><div className="bg-green-50 px-6 py-4 border-b border-green-100"><h3 className="font-bold text-lg text-green-800">สรุปผลการพิจารณา (ความคิดเห็นรวม)</h3></div><div className="p-6"><textarea className="input-field h-32 border-green-200 focus:ring-green-500 focus:border-green-500" placeholder="สรุปประเด็นสำคัญ จุดเด่น จุดด้อย..." value={rev.summary} onChange={e => setRev({...rev, summary: e.target.value})}></textarea><div className="mt-6 flex justify-end"><button onClick={saveReview} className="btn-primary text-lg px-8 py-3 shadow-lg transform hover:scale-105 transition-transform bg-green-700 hover:bg-green-800 flex items-center gap-2"><span className="text-xl">💾</span> บันทึกผลการพิจารณา</button></div></div></div>
+                </div>
+             </div>
+          </div>
+       );
+    };
+
+    // 4. ADMIN VIEW (Refined)
+    const AdminView = ({ user }) => {
+       const [data, setData] = useState({ settings:{openTime:'',closeTime:''}, committees:[], nominators:[], facultyStatus:{}, reviews:[], faculties:[], users:[] });
+       const [tab, setTab] = useState('dashboard');
+       const [times, setTimes] = useState({ openTime: '', closeTime: '' });
+       const [searchTerm, setSearchTerm] = useState(''); // Added Search for Users
+
+       const fetchData = () => {
+           Swal.fire({ title: 'กำลังโหลดข้อมูล...', didOpen: () => Swal.showLoading() });
+           runScript('apiGetAdminDashboardData').then(res => {
+             Swal.close();
+             if (res.status === 'success') {
+                const safeData = {
+                    ...res,
+                    faculties: res.faculties || [],
+                    committees: res.committees || [],
+                    users: res.users || [],
+                    facultyStatus: res.facultyStatus || {},
+                    reviews: res.reviews || []
+                };
+                setData(safeData);
+                setTimes({ 
+                    openTime: formatDateForInput(res.settings.openTime), 
+                    closeTime: formatDateForInput(res.settings.closeTime) 
+                });
+             } else Swal.fire('เกิดข้อผิดพลาด', res.message, 'error');
+           });
+       }
+
+       useEffect(() => {
+          fetchData();
+       }, []);
+
+       const saveSettings = async () => {
+          Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
+          const res = await runScript('apiSaveSystemSettings', times.openTime, times.closeTime);
+          if (res.status === 'success') Swal.fire('สำเร็จ', 'บันทึกการตั้งค่าเรียบร้อย', 'success');
+          else Swal.fire('เกิดข้อผิดพลาด', res.message, 'error');
+       };
+
+       // Robust Calculation Logic (ป้องกันการหารด้วยศูนย์)
+       const totalNominators = data.faculties.length;
+       const sentCount = Object.keys(data.facultyStatus).length;
+       const nominatedCount = Object.values(data.facultyStatus).filter(f => f.intent === 'nominate').length;
+       const declineCount = Object.values(data.facultyStatus).filter(f => f.intent === 'decline').length;
+       
+       const progressPercent = totalNominators > 0 ? Math.round((sentCount/totalNominators)*100) : 0;
+
+       const getReviewStatus = (commUser, facultyName) => {
+          const facData = data.facultyStatus[facultyName];
+          if (!facData) return 'N/A';
+          if (facData.intent === 'decline') return 'Decline';
+          // Check if ANY review exists for this student by this committee member (using Name as stored in DB)
+          // Frontend 'commUser' is the 'name' from committee object.
+          // Review data stores 'reviewer' which is also the 'name'.
+          const hasReviewed = data.reviews.some(r => r.reviewer === commUser && String(r.studentId) === String(facData.studentId));
+          return hasReviewed ? 'Reviewed' : 'Pending';
+       };
+
+       const filteredUsers = data.users.filter(u => 
+          (u.username || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+          (u.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (u.department || '').toLowerCase().includes(searchTerm.toLowerCase())
+       );
+
+       return (
+          <div className="max-w-7xl mx-auto space-y-6">
+             <div className="flex gap-4 mb-6 border-b pb-1">
+                {['dashboard', 'tracking', 'settings'].map(t => (
+                   <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 font-bold rounded-t-lg transition flex items-center gap-2 ${tab === t ? 'bg-purple-800 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
+                      {t === 'dashboard' ? Icons.Chart : t === 'tracking' ? Icons.Table : Icons.Cog}
+                      {t === 'dashboard' ? 'ภาพรวม (Dashboard)' : t === 'tracking' ? 'ติดตามผล' : 'ตั้งค่าระบบ'}
+                   </button>
+                ))}
+                <div className="flex-1"></div>
+                <button onClick={fetchData} className="text-gray-500 hover:text-purple-700 px-3 py-1 rounded hover:bg-gray-100 transition flex items-center gap-1 text-sm">{Icons.Refresh} รีโหลดข้อมูล</button>
+             </div>
+
+             {/* DASHBOARD TAB */}
+             {tab === 'dashboard' && (
+                <div className="animate-fade-in space-y-6">
+                   {totalNominators === 0 && (
+                      <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 text-yellow-800 rounded shadow-sm">
+                         <p className="font-bold">⚠️ ไม่พบข้อมูลสำนักวิชา</p>
+                         <p className="text-sm">กรุณาไปที่ Google Sheet แผ่นงาน <b>Faculties</b> และระบุรายชื่อสำนักวิชาใน <b>Column B (FacultyName)</b> เพื่อให้ระบบแสดงผลถูกต้อง</p>
+                      </div>
+                   )}
+
+                   <div className="grid md:grid-cols-3 gap-6">
+                      <div className="card border-l-4 border-blue-500 relative overflow-hidden group">
+                         <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity transform group-hover:scale-110">{Icons.Building}</div>
+                         <h3 className="text-gray-500 text-sm font-bold">สถานะการเสนอชื่อ</h3>
+                         <div className="flex items-end gap-2 mt-2">
+                            <span className="text-4xl font-bold text-blue-800">{sentCount}<span className="text-lg text-gray-400 font-normal">/{totalNominators}</span></span>
+                            <span className="text-sm text-gray-500 mb-1">สำนักวิชา</span>
+                         </div>
+                         <div className="w-full bg-gray-200 h-2 rounded-full mt-4"><div className="bg-blue-500 h-2 rounded-full transition-all duration-1000" style={{width: `${progressPercent}%`}}></div></div>
+                         <p className="text-xs text-right text-gray-400 mt-1">{progressPercent}% สำเร็จ</p>
+                      </div>
+                      <div className="card border-l-4 border-green-500 relative overflow-hidden group">
+                         <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity transform group-hover:scale-110">{Icons.User}</div>
+                         <h3 className="text-gray-500 text-sm font-bold">เสนอชื่อเข้าชิง</h3>
+                         <div className="text-4xl font-bold text-green-800 mt-2">{nominatedCount} <span className="text-sm text-gray-500 font-normal">คน</span></div>
+                         <div className="text-xs text-gray-400 mt-1 bg-gray-100 inline-block px-2 py-0.5 rounded">สละสิทธิ์ {declineCount} แห่ง</div>
+                      </div>
+                      <div className="card border-l-4 border-purple-500 relative overflow-hidden group">
+                         <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity transform group-hover:scale-110">{Icons.Users}</div>
+                         <h3 className="text-gray-500 text-sm font-bold">กรรมการ</h3>
+                         <div className="text-4xl font-bold text-purple-800 mt-2">{data.committees.length} <span className="text-sm text-gray-500 font-normal">ท่าน</span></div>
+                         <div className="text-xs text-gray-400 mt-1">ผู้ใช้ทั้งหมด {data.users.length} คน</div>
+                      </div>
+                   </div>
+
+                   <div className="card">
+                      <h3 className="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2 border-b pb-2">{Icons.Table} สรุปความสมบูรณ์ของเอกสาร (แยกตามสำนักวิชา)</h3>
+                      <div className="overflow-x-auto">
+                         <table className="w-full text-sm text-left">
+                            <thead className="text-xs text-gray-700 uppercase bg-gray-50"><tr><th className="px-4 py-3">สำนักวิชา</th><th className="px-4 py-3">สถานะ</th><th className="px-4 py-3">ชื่อนักศึกษา</th><th className="px-4 py-3">ความสมบูรณ์เอกสาร</th></tr></thead>
+                            <tbody>
+                               {data.faculties.length > 0 ? data.faculties.map((f, i) => {
+                                  const info = data.facultyStatus[f];
+                                  return (
+                                     <tr key={i} className="border-b hover:bg-gray-50 transition-colors">
+                                        <td className="px-4 py-3 font-medium">{f}</td>
+                                        <td className="px-4 py-3">{!info ? <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs font-bold">ยังไม่ส่งข้อมูล</span> : (info.intent==='decline' ? <span className="bg-red-100 text-red-700 px-2 py-1 rounded text-xs font-bold">สละสิทธิ์</span> : <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold">เสนอชื่อ</span>)}</td>
+                                        <td className="px-4 py-3 text-gray-600">{info?.studentName || '-'}</td>
+                                        <td className="px-4 py-3">
+                                           {info?.intent === 'nominate' ? (
+                                              <div className="flex items-center gap-2">
+                                                 <div className="w-24 bg-gray-200 rounded-full h-2.5"><div className={`h-2.5 rounded-full ${info.docCompleteness===100?'bg-green-600':'bg-yellow-400'}`} style={{width: `${info.docCompleteness}%`}}></div></div>
+                                                 <span className="text-xs font-bold text-gray-600">{info.docCompleteness}%</span>
+                                              </div>
+                                           ) : '-'}
+                                        </td>
+                                     </tr>
+                                  );
+                               }) : <tr><td colSpan="4" className="text-center py-4 text-gray-500">ไม่พบรายชื่อสำนักวิชา (กรุณาเพิ่มในชีต Faculties คอลัมน์ B)</td></tr>}
+                            </tbody>
+                         </table>
+                      </div>
+                   </div>
+                </div>
+             )}
+
+             {/* TAB 2: TRACKING MATRIX */}
+             {tab === 'tracking' && (
+                <div className="card animate-fade-in overflow-hidden">
+                   <h3 className="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2 border-b pb-2">{Icons.Search} ติดตามการพิจารณาของคณะกรรมการ</h3>
+                   <div className="overflow-x-auto pb-4">
+                      <table className="w-full text-sm border-collapse">
+                         <thead>
+                            <tr>
+                               <th className="p-3 border bg-purple-50 text-purple-900 sticky left-0 z-10 min-w-[250px] text-left shadow-sm">สำนักวิชา / กรรมการ</th>
+                               {data.committees.map((c, i) => (
+                                  <th key={i} className="p-2 border bg-gray-50 text-gray-700 text-center min-w-[100px]">
+                                     <div className="font-bold text-purple-800 truncate max-w-[100px]" title={c.name}>{c.username}</div>
+                                     <div className="text-xs text-gray-500 font-normal truncate max-w-[100px]">{c.name.split(' ').slice(0, 2).join(' ')}</div>
+                                  </th>
+                               ))}
+                            </tr>
+                         </thead>
+                         <tbody>
+                            {data.faculties.length > 0 ? data.faculties.map((f, r) => (
+                               <tr key={r} className="hover:bg-gray-50 transition-colors">
+                                  <td className="p-3 border font-medium text-gray-800 sticky left-0 bg-white shadow-sm">{f}</td>
+                                  {data.committees.map((comm, c) => {
+                                     const status = getReviewStatus(comm.name, f);
+                                     return (
+                                        <td key={c} className="p-2 border text-center">
+                                           {status === 'Reviewed' && <span className="text-green-600 text-xl cursor-help" title="พิจารณาแล้ว">●</span>}
+                                           {status === 'Pending' && <span className="text-red-300 text-xl cursor-help" title="รอพิจารณา">○</span>}
+                                           {status === 'Decline' && <span className="text-gray-300 text-xs bg-gray-100 px-1 rounded cursor-help" title="สละสิทธิ์">สละ</span>}
+                                           {status === 'N/A' && <span className="text-gray-200 text-xs">-</span>}
+                                        </td>
+                                     );
+                                  })}
+                               </tr>
+                            )) : <tr><td colSpan={data.committees.length+1} className="text-center py-4 text-gray-500">ไม่พบข้อมูลรายชื่อสำนักวิชา</td></tr>}
+                         </tbody>
+                      </table>
+                      <div className="mt-4 flex flex-wrap gap-4 text-xs text-gray-500 justify-end p-2 bg-gray-50 rounded">
+                         <span className="font-bold mr-2">คำอธิบายสัญลักษณ์:</span>
+                         <span className="flex items-center gap-1"><span className="text-green-600 text-xl">●</span> พิจารณาแล้ว</span>
+                         <span className="flex items-center gap-1"><span className="text-red-300 text-xl">○</span> รอพิจารณา (ส่งข้อมูลแล้ว)</span>
+                         <span className="flex items-center gap-1"><span className="text-gray-300 bg-gray-100 px-1 rounded">สละ</span> สละสิทธิ์</span>
+                         <span className="flex items-center gap-1"><span className="text-gray-200 font-bold">-</span> ยังไม่ส่งข้อมูล</span>
+                      </div>
+                   </div>
+                </div>
+             )}
+
+             {/* TAB 3: SETTINGS */}
+             {tab === 'settings' && (
+                <div className="animate-fade-in space-y-6">
+                   <div className="card">
+                      <h3 className="font-bold text-lg text-gray-800 mb-4 border-b pb-2">{Icons.Cog} ตั้งค่าเวลาเปิด-ปิดระบบ</h3>
+                      <div className="grid md:grid-cols-2 gap-6">
+                         <div><label className="block text-sm font-medium mb-1">เวลาเปิดรับการเสนอชื่อ</label><input type="datetime-local" className="input-field" value={times.openTime} onChange={e=>setTimes({...times, openTime:e.target.value})} /></div>
+                         <div><label className="block text-sm font-medium mb-1">เวลาปิดรับการเสนอชื่อ</label><input type="datetime-local" className="input-field" value={times.closeTime} onChange={e=>setTimes({...times, closeTime:e.target.value})} /></div>
+                      </div>
+                      <div className="mt-4 text-right"><button onClick={saveSettings} className="btn-primary">บันทึกเวลา</button></div>
+                   </div>
+
+                   <div className="card">
+                      <div className="flex justify-between items-center mb-4 border-b pb-2">
+                          <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">{Icons.Users} รายชื่อผู้ใช้งานในระบบ</h3>
+                          <input 
+                              type="text" 
+                              placeholder="ค้นหาชื่อ, Username..." 
+                              className="input-field w-64 text-sm"
+                              value={searchTerm}
+                              onChange={e => setSearchTerm(e.target.value)}
+                          />
+                      </div>
+                      <div className="overflow-x-auto max-h-96 custom-scrollbar">
+                         <table className="w-full text-sm text-left">
+                            <thead className="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0">
+                                <tr>
+                                    <th className="px-4 py-3">Username (Col C)</th>
+                                    <th className="px-4 py-3">ชื่อ-สกุล (Col F)</th>
+                                    <th className="px-4 py-3">หน่วยงาน (Col D)</th>
+                                    <th className="px-4 py-3">สิทธิ์ (Col E)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                               {filteredUsers.length > 0 ? filteredUsers.map((u, i) => (
+                                  <tr key={i} className="border-b hover:bg-gray-50 transition-colors">
+                                     <td className="px-4 py-3 font-mono text-purple-700">{u.username}</td>
+                                     <td className="px-4 py-3">{u.name}</td>
+                                     <td className="px-4 py-3">{u.department}</td>
+                                     <td className="px-4 py-3"><span className={`px-2 py-1 rounded-full text-xs font-bold ${u.role==='Admin'?'bg-gray-800 text-white':(u.role==='Committee'?'bg-purple-100 text-purple-800':'bg-blue-100 text-blue-800')}`}>{u.role}</span></td>
+                                  </tr>
+                               )) : <tr><td colSpan="4" className="text-center py-4 text-gray-500">ไม่พบข้อมูลที่ตรงกับคำค้นหา</td></tr>}
+                            </tbody>
+                         </table>
+                      </div>
+                   </div>
+                </div>
+             )}
+          </div>
+       );
+    };
+
+    const App = () => {
+       const [user, setUser] = useState(null); const [canEdit, setCanEdit] = useState(false); const [isSystemOpen, setIsSystemOpen] = useState(false); const [msg, setMsg] = useState('');
+       
+       const handleLogout = () => { setUser(null); setCanEdit(false); setMsg(''); };
+
+       if (!user) return <Login onLogin={res => { setUser(res.user); setCanEdit(res.canEdit); setIsSystemOpen(res.isSystemOpen); setMsg(res.systemMessage); }} />;
+       
+       return (
+          <div className="min-h-screen flex flex-col">
+            <header className="bg-white shadow-sm z-10 sticky top-0">
+                <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+                   <div className="flex items-center gap-3">
+                      <div className="bg-purple-800 text-white font-bold px-2 h-10 flex items-center justify-center rounded-lg shadow">WU-RAS</div>
+                      <div>
+                         <h1 className="font-bold text-gray-800 leading-tight">ระบบประเมินนักศึกษารางวัลพระราชทาน</h1>
+                         <p className="text-xs text-gray-500">สถานะ: <span className={`${isSystemOpen?'text-green-600':'text-red-600'} font-bold`}>{isSystemOpen ? 'เปิดรับข้อมูล' : 'ปิดรับข้อมูล'}</span></p>
+                      </div>
+                   </div>
+                   <div className="flex items-center gap-4">
+                        <div className="text-right hidden md:block">
+                            <div className="text-sm font-bold text-gray-800">{user.name}</div>
+                            <div className="text-xs text-gray-500">{user.role} | {user.department}</div>
+                        </div>
+                        <button onClick={handleLogout} className="text-red-600 hover:text-red-800 text-sm font-medium border border-red-200 px-3 py-1.5 rounded hover:bg-red-50 transition">ออกจากระบบ</button>
+                   </div>
+                </div>
+             </header>
+             <main className="flex-1 p-4 md:p-8">
+                {user.role === 'Nominator' && <NominatorView user={user} canEdit={canEdit} systemMessage={msg}/>}
+                {user.role === 'Committee' && <CommitteeView user={user}/>}
+                {user.role === 'Admin' && <AdminView user={user}/>}
+                
+                {user.role !== 'Nominator' && user.role !== 'Committee' && user.role !== 'Admin' && (
+                    <div className="text-center p-10 bg-white rounded-lg shadow border-l-4 border-red-500 max-w-2xl mx-auto mt-10">
+                       <h2 className="text-xl font-bold text-red-600 mb-2">ไม่พบสิทธิ์การใช้งานสำหรับ Role: "{user.role}"</h2>
+                       <p className="text-gray-600">กรุณาตรวจสอบข้อมูลในชีต <b>Users</b> คอลัมน์ E (Role) ให้ถูกต้อง</p>
+                       <p className="text-sm text-gray-500 mt-2">ค่าที่ยอมรับ: <b>Nominator</b>, <b>Committee</b>, <b>Admin</b> (ตัวพิมพ์เล็ก-ใหญ่ต้องตรงกัน)</p>
+                    </div>
+                )}
+             </main>
+          </div>
+       );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
