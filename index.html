@@ -84,18 +84,82 @@
         return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
     };
 
-    // --- PRODUCTION SCRIPT RUNNER ---
+    // --- MOCK API (สำหรับ GitHub Pages / Local Testing) ---
+    const mockApi = {
+       apiLogin: (u, p) => new Promise(r => setTimeout(() => {
+          if(u==='admin') r({status:'success', user: {role:'Admin', name:'Admin User', department:'Center'}, canEdit:true, isSystemOpen:false});
+          else if(u==='comm') r({status:'success', user: {role:'Committee', name:'Dr. Somchai', department:'Committee'}, canEdit:true, isSystemOpen:false});
+          else if(u==='school') r({status:'success', user: {role:'Nominator', name:'Staff Sci', department:'สำนักวิชาวิทยาศาสตร์'}, canEdit:true, isSystemOpen:true});
+          else r({status:'error', message:'รหัสผู้ใช้ไม่ถูกต้อง (ลองใช้: admin, comm, หรือ school)'});
+       }, 800)),
+       apiGetNominatorData: (d) => new Promise(r => setTimeout(() => r({
+           status:'success', 
+           data: {
+               intent: 'nominate',
+               studentId: '64123456',
+               studentName: 'นายรักเรียน เพียรศึกษา',
+               curriculum: 'วิทยาศาสตร์ทางทะเล',
+               email: 'student@example.com',
+               phone: '0812345678',
+               advisorName: 'อ.ที่ปรึกษา ใจดี',
+               advisorPhone: '0891234567',
+               advisorEmail: 'advisor@example.com'
+           }
+       }), 600)),
+       apiUploadFile: () => new Promise(r => setTimeout(() => r({status:'success', url:'#'}), 1000)),
+       apiSaveCandidate: () => new Promise(r => setTimeout(() => r({status:'success'}), 800)),
+       apiGetCommitteeData: () => new Promise(r => setTimeout(() => r({
+           status:'success', 
+           candidates:[
+               {studentId:'64123456', studentName:'นายรักเรียน เพียรศึกษา', department:'สำนักวิชาวิทยาศาสตร์', curriculum:'วิทยาศาสตร์ทางทะเล', reviewStatus:'pending', intent:'nominate'},
+               {studentId:'64987654', studentName:'นางสาวขยัน มั่นคง', department:'สำนักวิชาพยาบาลศาสตร์', curriculum:'พยาบาลศาสตร์', reviewStatus:'reviewed', intent:'nominate'},
+               {studentId:'64555555', department:'สำนักวิชาศิลปศาสตร์', intent:'decline'}
+           ]
+       }), 600)),
+       apiSaveReview: () => new Promise(r => setTimeout(() => r({status:'success'}), 800)),
+       apiGetAdminDashboardData: () => new Promise(r => setTimeout(() => r({
+           status:'success', 
+           settings:{openTime: '2025-01-01T08:00', closeTime: '2025-02-28T16:00'}, 
+           faculties:['สำนักวิชาวิทยาศาสตร์','สำนักวิชาพยาบาลศาสตร์','สำนักวิชาศิลปศาสตร์','สำนักวิชาเภสัชศาสตร์','สำนักวิชาแพทยศาสตร์', 'สำนักวิชาสารสนเทศศาสตร์'], 
+           committees:[{name:'Dr. Somchai', username:'comm'},{name:'Dr. Somsri', username:'comm2'}], 
+           facultyStatus:{
+               'สำนักวิชาวิทยาศาสตร์': {intent:'nominate', studentName:'นายรักเรียน เพียรศึกษา', docCompleteness:100},
+               'สำนักวิชาพยาบาลศาสตร์': {intent:'nominate', studentName:'นางสาวขยัน มั่นคง', docCompleteness:80},
+               'สำนักวิชาศิลปศาสตร์': {intent:'decline'}
+           }, 
+           reviews:[
+               {reviewer:'Dr. Somchai', studentId:'64987654'} 
+           ], 
+           users:[
+               {username:'school', department:'สำนักวิชาวิทยาศาสตร์', role:'Nominator', name:'Staff Sci'}, 
+               {username:'admin', department:'Center', role:'Admin', name:'Admin User'},
+               {username:'comm', department:'Committee', role:'Committee', name:'Dr. Somchai'}
+           ]
+       }), 600)),
+       apiSaveSystemSettings: () => new Promise(r => setTimeout(() => r({status:'success'}), 500))
+    };
+
+    // --- SCRIPT RUNNER (Adaptive: Works on both GitHub & GAS) ---
     const runScript = (funcName, ...args) => {
        return new Promise((resolve, reject) => {
-          if (typeof google === 'undefined' || !google.script) {
-             // Fallback error if run outside Apps Script environment
-             reject(new Error("Google Script Environment not found. Please deploy as Web App."));
-             return;
+          // 1. ตรวจสอบว่ามี google.script (รันบน Google Apps Script หรือไม่)
+          if (typeof google !== 'undefined' && google.script && google.script.run) {
+             google.script.run
+                .withSuccessHandler(resolve)
+                .withFailureHandler(e => resolve({status:'error', message: e.message}))
+                [funcName](...args);
+          } else {
+             // 2. ถ้ารันบน Browser ทั่วไป (GitHub Pages) ให้ใช้ Mock API
+             console.log(`[GitHub Mode] Calling ${funcName}`, args);
+             if (mockApi[funcName]) {
+                 mockApi[funcName](...args).then(resolve);
+             } else if (funcName === 'apiLogin') {
+                 mockApi.apiLogin(...args).then(resolve);
+             } else {
+                 console.warn(`No mock implementation for ${funcName}`);
+                 resolve({status:'success'});
+             }
           }
-          google.script.run
-            .withSuccessHandler(resolve)
-            .withFailureHandler(e => resolve({status:'error', message: e.message}))
-            [funcName](...args);
        });
     };
 
@@ -114,7 +178,7 @@
       Building: <Icon d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />,
       Chart: <Icon d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />,
       Table: <Icon d="M3 10h18M3 14h18m-9-4v8m-7-4h14M4 6h16a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2z" />,
-      Cog: <Icon d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />,
+      Cog: <Icon d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />,
       Refresh: <Icon d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />,
       Clock: <Icon d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
     };
@@ -183,6 +247,13 @@
                     <h1 className="text-lg font-bold text-gray-800">ระบบประเมินนักศึกษาเพื่อรับรางวัลพระราชทาน</h1>
                     <p className="text-sm text-gray-500">รอบสถาบัน (มหาวิทยาลัยวลัยลักษณ์) ปีการศึกษา 2568</p>
                 </div>
+                {/* GitHub Mode Indicator */}
+                {(typeof google === 'undefined') && (
+                    <div className="text-xs text-orange-600 bg-orange-100 p-2 rounded mb-4 text-center border border-orange-200">
+                        Running in <b>Demo Mode</b> (GitHub Pages)<br/>
+                        Login as: <b>school, comm, admin</b>
+                    </div>
+                )}
                 <form onSubmit={sub} className="space-y-4">
                    <input className="input-field" value={u} onChange={e=>setU(e.target.value)} required placeholder="รหัสผู้ใช้" />
                    
@@ -522,7 +593,39 @@
           }
        };
 
-       if (!sel) return <div className="max-w-6xl mx-auto space-y-6"><h2 className="text-2xl font-bold text-gray-800 border-b pb-4">รายชื่อนักศึกษา</h2><div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{cands.map((c,i)=><div key={i} className={`bg-white rounded-xl shadow-md p-5 border-l-4 hover:-translate-y-1 transition ${c.intent==='decline'?'border-red-500':(c.reviewStatus==='reviewed'?'border-green-500':'border-yellow-500')}`}><div className="flex justify-between items-start mb-3"><span className="text-sm font-bold text-gray-500 uppercase tracking-wide">{c.department}</span>{c.intent !== 'decline' && (c.reviewStatus==='reviewed' ? <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full flex gap-1 items-center">{Icons.Check} ตรวจแล้ว</span> : <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full flex gap-1 items-center">{Icons.Clock} รอพิจารณา</span>)}</div><h3 className="font-bold text-lg text-gray-800">{c.studentName||'ไม่ประสงค์เสนอชื่อ'}</h3>{c.intent==='nominate'&&<p className="text-sm text-gray-600 mt-1">{c.curriculum}</p>}<div className="mt-4 pt-4 border-t">{c.intent==='nominate'?<button onClick={()=>setSel(c)} className="text-white bg-purple-700 hover:bg-purple-800 px-4 py-2 rounded-lg text-sm font-bold w-full transition-colors flex justify-center items-center gap-2">{Icons.Search} ตรวจสอบข้อมูล</button>:<span className="text-red-600 text-sm font-medium w-full text-center bg-red-50 py-2 rounded">สละสิทธิ์</span>}</div></div>)}{cands.length===0&&<div className="col-span-full text-center py-12 text-gray-500">ยังไม่มีข้อมูลการเสนอชื่อเข้ามาในระบบ</div>}</div></div>;
+       // Helper to render student card
+       const renderCandidateCard = (c, i) => {
+          return (
+             <div key={i} className={`bg-white rounded-xl shadow-md p-5 border-l-4 hover:-translate-y-1 transition ${c.intent==='decline'?'border-red-500':(c.reviewStatus==='reviewed'?'border-green-500':'border-yellow-500')}`}>
+                <div className="flex justify-between items-start mb-3">
+                   <span className="text-sm font-bold text-gray-500 uppercase tracking-wide">{c.department}</span>
+                   {c.intent !== 'decline' && (
+                      c.reviewStatus==='reviewed' ? 
+                      <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full flex gap-1 items-center">{Icons.Check} ตรวจแล้ว</span> : 
+                      <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full flex gap-1 items-center">{Icons.Clock} รอพิจารณา</span>
+                   )}
+                </div>
+                <h3 className="font-bold text-lg text-gray-800">{c.studentName||'ไม่ประสงค์เสนอชื่อ'}</h3>
+                {c.intent==='nominate'&&<p className="text-sm text-gray-600 mt-1">{c.curriculum}</p>}
+                <div className="mt-4 pt-4 border-t">
+                   {c.intent==='nominate'?
+                      <button onClick={()=>setSel(c)} className="text-white bg-purple-700 hover:bg-purple-800 px-4 py-2 rounded-lg text-sm font-bold w-full transition-colors flex justify-center items-center gap-2">{Icons.Search} ตรวจสอบข้อมูล</button>:
+                      <span className="text-red-600 text-sm font-medium w-full text-center bg-red-50 py-2 rounded">สละสิทธิ์</span>
+                   }
+                </div>
+             </div>
+          );
+       };
+
+       if (!sel) return (
+          <div className="max-w-6xl mx-auto space-y-6">
+             <h2 className="text-2xl font-bold text-gray-800 border-b pb-4">รายชื่อนักศึกษา</h2>
+             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {cands.map((c, i) => renderCandidateCard(c, i))}
+                {cands.length===0 && <div className="col-span-full text-center py-12 text-gray-500">ยังไม่มีข้อมูลการเสนอชื่อเข้ามาในระบบ</div>}
+             </div>
+          </div>
+       );
 
        return (
           <div className="max-w-7xl mx-auto bg-white rounded-xl shadow-lg overflow-hidden flex flex-col min-h-screen">
@@ -712,6 +815,7 @@
                                <tr key={r} className="hover:bg-gray-50 transition-colors">
                                   <td className="p-3 border font-medium text-gray-800 sticky left-0 bg-white shadow-sm">{f}</td>
                                   {data.committees.map((comm, c) => {
+                                     // comm.name is used for checking review status because apiSaveReview saves 'reviewerName' (which is real name)
                                      const status = getReviewStatus(comm.name, f);
                                      return (
                                         <td key={c} className="p-2 border text-center">
@@ -785,50 +889,6 @@
                    </div>
                 </div>
              )}
-          </div>
-       );
-    };
-
-    const App = () => {
-       const [user, setUser] = useState(null); const [canEdit, setCanEdit] = useState(false); const [isSystemOpen, setIsSystemOpen] = useState(false); const [msg, setMsg] = useState('');
-       
-       const handleLogout = () => { setUser(null); setCanEdit(false); setMsg(''); };
-
-       if (!user) return <Login onLogin={res => { setUser(res.user); setCanEdit(res.canEdit); setIsSystemOpen(res.isSystemOpen); setMsg(res.systemMessage); }} />;
-       
-       return (
-          <div className="min-h-screen flex flex-col">
-            <header className="bg-white shadow-sm z-10 sticky top-0">
-                <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
-                   <div className="flex items-center gap-3">
-                      <div className="bg-purple-800 text-white font-bold px-2 h-10 flex items-center justify-center rounded-lg shadow">WU-RAS</div>
-                      <div>
-                         <h1 className="font-bold text-gray-800 leading-tight">ระบบประเมินนักศึกษารางวัลพระราชทาน</h1>
-                         <p className="text-xs text-gray-500">สถานะ: <span className={`${isSystemOpen?'text-green-600':'text-red-600'} font-bold`}>{isSystemOpen ? 'เปิดรับข้อมูล' : 'ปิดรับข้อมูล'}</span></p>
-                      </div>
-                   </div>
-                   <div className="flex items-center gap-4">
-                        <div className="text-right hidden md:block">
-                            <div className="text-sm font-bold text-gray-800">{user.name}</div>
-                            <div className="text-xs text-gray-500">{user.role} | {user.department}</div>
-                        </div>
-                        <button onClick={handleLogout} className="text-red-600 hover:text-red-800 text-sm font-medium border border-red-200 px-3 py-1.5 rounded hover:bg-red-50 transition">ออกจากระบบ</button>
-                   </div>
-                </div>
-             </header>
-             <main className="flex-1 p-4 md:p-8">
-                {user.role === 'Nominator' && <NominatorView user={user} canEdit={canEdit} systemMessage={msg}/>}
-                {user.role === 'Committee' && <CommitteeView user={user}/>}
-                {user.role === 'Admin' && <AdminView user={user}/>}
-                
-                {user.role !== 'Nominator' && user.role !== 'Committee' && user.role !== 'Admin' && (
-                    <div className="text-center p-10 bg-white rounded-lg shadow border-l-4 border-red-500 max-w-2xl mx-auto mt-10">
-                       <h2 className="text-xl font-bold text-red-600 mb-2">ไม่พบสิทธิ์การใช้งานสำหรับ Role: "{user.role}"</h2>
-                       <p className="text-gray-600">กรุณาตรวจสอบข้อมูลในชีต <b>Users</b> คอลัมน์ E (Role) ให้ถูกต้อง</p>
-                       <p className="text-sm text-gray-500 mt-2">ค่าที่ยอมรับ: <b>Nominator</b>, <b>Committee</b>, <b>Admin</b> (ตัวพิมพ์เล็ก-ใหญ่ต้องตรงกัน)</p>
-                    </div>
-                )}
-             </main>
           </div>
        );
     };
