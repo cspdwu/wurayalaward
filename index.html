@@ -72,6 +72,12 @@
   <div id="root"></div>
 
   <script type="text/babel">
+    // ********************************************************************************
+    // สำคัญ: ใส่ URL ของ Google Apps Script Web App ที่ได้จากการ Deploy ที่นี่
+    // ********************************************************************************
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxBs4QPz2zCuWiMoabR8CFEJT_yC_O4F4N408oVJtQybQ375tNHhFO7RDDMvVndO_FImg/exec"; 
+    // ตัวอย่าง: "https://script.google.com/macros/s/AKfycbx.../exec"
+
     const { useState, useEffect } = React;
     const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     
@@ -85,25 +91,26 @@
     };
 
     // --- MOCK API (สำหรับ GitHub Pages / Local Testing) ---
+    // ข้อมูลจำลองเพื่อให้ระบบทำงานได้โดยไม่ต้องต่อ Google Sheet จริง
     const mockApi = {
        apiLogin: (u, p) => new Promise(r => setTimeout(() => {
           if(u==='admin') r({status:'success', user: {role:'Admin', name:'Admin User', department:'Center'}, canEdit:true, isSystemOpen:false});
           else if(u==='comm') r({status:'success', user: {role:'Committee', name:'Dr. Somchai', department:'Committee'}, canEdit:true, isSystemOpen:false});
-          else if(u==='school') r({status:'success', user: {role:'Nominator', name:'Staff Sci', department:'สำนักวิชาวิทยาศาสตร์'}, canEdit:true, isSystemOpen:true});
+          else if(u==='school') r({status:'success', user: {role:'Nominator', name:'Staff Sci', department:'สำนักวิชาวิทยาศาสตร์'}, canEdit:true, isSystemOpen:true}); // ให้ school แก้ไขได้เพื่อทดสอบ
           else r({status:'error', message:'รหัสผู้ใช้ไม่ถูกต้อง (ลองใช้: admin, comm, หรือ school)'});
        }, 800)),
        apiGetNominatorData: (d) => new Promise(r => setTimeout(() => r({
            status:'success', 
            data: {
                intent: 'nominate',
-               studentId: '64123456',
-               studentName: 'นายรักเรียน เพียรศึกษา',
-               curriculum: 'วิทยาศาสตร์ทางทะเล',
-               email: 'student@example.com',
+               studentId: '64000001',
+               studentName: 'นายตัวอย่าง รักเรียน',
+               curriculum: 'วิทยาศาสตร์',
+               email: 'student@wu.ac.th',
                phone: '0812345678',
-               advisorName: 'อ.ที่ปรึกษา ใจดี',
-               advisorPhone: '0891234567',
-               advisorEmail: 'advisor@example.com'
+               advisorName: 'ดร.ใจดี มีสุข',
+               advisorPhone: '0898765432',
+               advisorEmail: 'advisor@wu.ac.th'
            }
        }), 600)),
        apiUploadFile: () => new Promise(r => setTimeout(() => r({status:'success', url:'#'}), 1000)),
@@ -111,24 +118,24 @@
        apiGetCommitteeData: () => new Promise(r => setTimeout(() => r({
            status:'success', 
            candidates:[
-               {studentId:'64123456', studentName:'นายรักเรียน เพียรศึกษา', department:'สำนักวิชาวิทยาศาสตร์', curriculum:'วิทยาศาสตร์ทางทะเล', reviewStatus:'pending', intent:'nominate'},
-               {studentId:'64987654', studentName:'นางสาวขยัน มั่นคง', department:'สำนักวิชาพยาบาลศาสตร์', curriculum:'พยาบาลศาสตร์', reviewStatus:'reviewed', intent:'nominate'},
-               {studentId:'64555555', department:'สำนักวิชาศิลปศาสตร์', intent:'decline'}
+               {studentId:'64000001', studentName:'นายตัวอย่าง รักเรียน', department:'สำนักวิชาวิทยาศาสตร์', curriculum:'วิทยาศาสตร์', reviewStatus:'pending', intent:'nominate'},
+               {studentId:'64000002', studentName:'นางสาวขยัน หมั่นเพียร', department:'สำนักวิชาพยาบาลศาสตร์', curriculum:'พยาบาลศาสตร์', reviewStatus:'reviewed', intent:'nominate'},
+               {studentId:'64000003', department:'สำนักวิชาศิลปศาสตร์', intent:'decline'}
            ]
        }), 600)),
        apiSaveReview: () => new Promise(r => setTimeout(() => r({status:'success'}), 800)),
        apiGetAdminDashboardData: () => new Promise(r => setTimeout(() => r({
            status:'success', 
-           settings:{openTime: '2025-01-01T08:00', closeTime: '2025-02-28T16:00'}, 
-           faculties:['สำนักวิชาวิทยาศาสตร์','สำนักวิชาพยาบาลศาสตร์','สำนักวิชาศิลปศาสตร์','สำนักวิชาเภสัชศาสตร์','สำนักวิชาแพทยศาสตร์', 'สำนักวิชาสารสนเทศศาสตร์'], 
+           settings:{openTime: '2025-01-01', closeTime: '2025-02-01'}, 
+           faculties:['สำนักวิชาวิทยาศาสตร์','สำนักวิชาพยาบาลศาสตร์','สำนักวิชาศิลปศาสตร์','สำนักวิชาเภสัชศาสตร์','สำนักวิชาแพทยศาสตร์'], 
            committees:[{name:'Dr. Somchai', username:'comm'},{name:'Dr. Somsri', username:'comm2'}], 
            facultyStatus:{
-               'สำนักวิชาวิทยาศาสตร์': {intent:'nominate', studentName:'นายรักเรียน เพียรศึกษา', docCompleteness:100},
-               'สำนักวิชาพยาบาลศาสตร์': {intent:'nominate', studentName:'นางสาวขยัน มั่นคง', docCompleteness:80},
+               'สำนักวิชาวิทยาศาสตร์': {intent:'nominate', studentName:'นายตัวอย่าง รักเรียน', docCompleteness:100},
+               'สำนักวิชาพยาบาลศาสตร์': {intent:'nominate', studentName:'นางสาวขยัน หมั่นเพียร', docCompleteness:80},
                'สำนักวิชาศิลปศาสตร์': {intent:'decline'}
            }, 
            reviews:[
-               {reviewer:'Dr. Somchai', studentId:'64987654'} 
+               {reviewer:'Dr. Somchai', studentId:'64000002'} // Mock ว่า Dr. Somchai ตรวจคนนี้แล้ว
            ], 
            users:[
                {username:'school', department:'สำนักวิชาวิทยาศาสตร์', role:'Nominator', name:'Staff Sci'}, 
@@ -139,7 +146,7 @@
        apiSaveSystemSettings: () => new Promise(r => setTimeout(() => r({status:'success'}), 500))
     };
 
-    // --- SCRIPT RUNNER (Adaptive: Works on both GitHub & GAS) ---
+    // --- HELPER: SCRIPT RUNNER (Adaptive) ---
     const runScript = (funcName, ...args) => {
        return new Promise((resolve, reject) => {
           // 1. ตรวจสอบว่ามี google.script (รันบน Google Apps Script หรือไม่)
@@ -149,23 +156,55 @@
                 .withFailureHandler(e => resolve({status:'error', message: e.message}))
                 [funcName](...args);
           } else {
-             // 2. ถ้ารันบน Browser ทั่วไป (GitHub Pages) ให้ใช้ Mock API
-             console.log(`[GitHub Mode] Calling ${funcName}`, args);
-             if (mockApi[funcName]) {
-                 mockApi[funcName](...args).then(resolve);
-             } else if (funcName === 'apiLogin') {
-                 mockApi.apiLogin(...args).then(resolve);
+             // 2. ถ้ารันบน Browser ทั่วไป (GitHub Pages) หรือไม่มี GAS_API_URL ให้ใช้ Mock API
+             // แต่ถ้ามี GAS_API_URL ให้ใช้ fetch
+             if (GAS_API_URL && !funcName.startsWith('mock')) {
+                 const payload = {
+                     action: funcName,
+                     ...mapArgsToParams(funcName, args)
+                 };
+                 fetch(GAS_API_URL, {
+                     method: 'POST',
+                     body: JSON.stringify(payload)
+                 })
+                 .then(res => res.json())
+                 .then(data => resolve(data))
+                 .catch(e => {
+                     console.warn("Fetch failed, falling back to mock", e);
+                     if (mockApi[funcName]) mockApi[funcName](...args).then(resolve);
+                     else reject(e);
+                 });
              } else {
-                 console.warn(`No mock implementation for ${funcName}`);
-                 resolve({status:'success'});
+                 // Fallback to Mock API directly
+                 console.log(`[Demo/Mock Mode] Calling ${funcName}`, args);
+                 if (mockApi[funcName]) {
+                     mockApi[funcName](...args).then(resolve);
+                 } else if (funcName === 'apiLogin') {
+                     mockApi.apiLogin(...args).then(resolve);
+                 } else {
+                     console.warn(`No mock implementation for ${funcName}`);
+                     resolve({status:'success'});
+                 }
              }
           }
        });
     };
 
+    // Helper to map array args to named params for the API (for fetch)
+    const mapArgsToParams = (func, args) => {
+        const p = {};
+        if(func === 'apiLogin') { p.username = args[0]; p.password = args[1]; }
+        else if(func === 'apiGetNominatorData') { p.department = args[0]; }
+        else if(func === 'apiUploadFile') { p.data = args[0]; p.fileName = args[1]; p.folderName = args[2]; }
+        else if(func === 'apiSaveCandidate') { p.form = args[0]; p.role = args[1]; p.department = args[2]; }
+        else if(func === 'apiGetCommitteeData') { p.reviewerName = args[0]; }
+        else if(func === 'apiSaveReview') { p.data = args[0]; p.reviewerName = args[1]; }
+        else if(func === 'apiSaveSystemSettings') { p.open = args[0]; p.close = args[1]; }
+        return p;
+    }
+
     // --- ICONS ---
-    const Icon = ({d, c}) => <svg className={`w-5 h-5 ${c || ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={d}></path></svg>;
-    
+    const Icon = ({d, c}) => <svg className={`w-5 h-5 ${c}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={d}></path></svg>;
     const Icons = {
       Upload: <Icon d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />,
       Check: <Icon d="M5 13l4 4L19 7" c="text-green-600" />,
@@ -178,7 +217,7 @@
       Building: <Icon d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />,
       Chart: <Icon d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />,
       Table: <Icon d="M3 10h18M3 14h18m-9-4v8m-7-4h14M4 6h16a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2z" />,
-      Cog: <Icon d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />,
+      Cog: <Icon d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />,
       Refresh: <Icon d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />,
       Clock: <Icon d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
     };
@@ -247,13 +286,7 @@
                     <h1 className="text-lg font-bold text-gray-800">ระบบประเมินนักศึกษาเพื่อรับรางวัลพระราชทาน</h1>
                     <p className="text-sm text-gray-500">รอบสถาบัน (มหาวิทยาลัยวลัยลักษณ์) ปีการศึกษา 2568</p>
                 </div>
-                {/* GitHub Mode Indicator */}
-                {(typeof google === 'undefined') && (
-                    <div className="text-xs text-orange-600 bg-orange-100 p-2 rounded mb-4 text-center border border-orange-200">
-                        Running in <b>Demo Mode</b> (GitHub Pages)<br/>
-                        Login as: <b>school, comm, admin</b>
-                    </div>
-                )}
+                {(typeof google === 'undefined' && !GAS_API_URL) && <div className="text-xs text-orange-600 bg-orange-100 p-2 rounded mb-4 text-center">Running in Demo Mode (ข้อมูลจำลอง)</div>}
                 <form onSubmit={sub} className="space-y-4">
                    <input className="input-field" value={u} onChange={e=>setU(e.target.value)} required placeholder="รหัสผู้ใช้" />
                    
@@ -889,6 +922,50 @@
                    </div>
                 </div>
              )}
+          </div>
+       );
+    };
+
+    const App = () => {
+       const [user, setUser] = useState(null); const [canEdit, setCanEdit] = useState(false); const [isSystemOpen, setIsSystemOpen] = useState(false); const [msg, setMsg] = useState('');
+       
+       const handleLogout = () => { setUser(null); setCanEdit(false); setMsg(''); };
+
+       if (!user) return <Login onLogin={res => { setUser(res.user); setCanEdit(res.canEdit); setIsSystemOpen(res.isSystemOpen); setMsg(res.systemMessage); }} />;
+       
+       return (
+          <div className="min-h-screen flex flex-col">
+            <header className="bg-white shadow-sm z-10 sticky top-0">
+                <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+                   <div className="flex items-center gap-3">
+                      <div className="bg-purple-800 text-white font-bold px-2 h-10 flex items-center justify-center rounded-lg shadow">WU-RAS</div>
+                      <div>
+                         <h1 className="font-bold text-gray-800 leading-tight">ระบบประเมินนักศึกษารางวัลพระราชทาน</h1>
+                         <p className="text-xs text-gray-500">สถานะ: <span className={`${isSystemOpen?'text-green-600':'text-red-600'} font-bold`}>{isSystemOpen ? 'เปิดรับข้อมูล' : 'ปิดรับข้อมูล'}</span></p>
+                      </div>
+                   </div>
+                   <div className="flex items-center gap-4">
+                        <div className="text-right hidden md:block">
+                            <div className="text-sm font-bold text-gray-800">{user.name}</div>
+                            <div className="text-xs text-gray-500">{user.role} | {user.department}</div>
+                        </div>
+                        <button onClick={handleLogout} className="text-red-600 hover:text-red-800 text-sm font-medium border border-red-200 px-3 py-1.5 rounded hover:bg-red-50 transition">ออกจากระบบ</button>
+                   </div>
+                </div>
+             </header>
+             <main className="flex-1 p-4 md:p-8">
+                {user.role === 'Nominator' && <NominatorView user={user} canEdit={canEdit} systemMessage={msg}/>}
+                {user.role === 'Committee' && <CommitteeView user={user}/>}
+                {user.role === 'Admin' && <AdminView user={user}/>}
+                
+                {user.role !== 'Nominator' && user.role !== 'Committee' && user.role !== 'Admin' && (
+                    <div className="text-center p-10 bg-white rounded-lg shadow border-l-4 border-red-500 max-w-2xl mx-auto mt-10">
+                       <h2 className="text-xl font-bold text-red-600 mb-2">ไม่พบสิทธิ์การใช้งานสำหรับ Role: "{user.role}"</h2>
+                       <p className="text-gray-600">กรุณาตรวจสอบข้อมูลในชีต <b>Users</b> คอลัมน์ E (Role) ให้ถูกต้อง</p>
+                       <p className="text-sm text-gray-500 mt-2">ค่าที่ยอมรับ: <b>Nominator</b>, <b>Committee</b>, <b>Admin</b> (ตัวพิมพ์เล็ก-ใหญ่ต้องตรงกัน)</p>
+                    </div>
+                )}
+             </main>
           </div>
        );
     };
