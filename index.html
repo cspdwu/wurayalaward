@@ -91,7 +91,6 @@
     };
 
     // --- MOCK API (สำหรับ GitHub Pages / Local Testing) ---
-    // ข้อมูลจำลองเพื่อให้ระบบทำงานได้โดยไม่ต้องต่อ Google Sheet จริง
     const mockApi = {
        apiLogin: (u, p) => new Promise(r => setTimeout(() => {
           if(u==='admin') r({status:'success', user: {role:'Admin', name:'Admin User', department:'Center'}, canEdit:true, isSystemOpen:false});
@@ -119,7 +118,21 @@
            status:'success', 
            candidates:[
                {studentId:'64000001', studentName:'นายตัวอย่าง รักเรียน', department:'สำนักวิชาวิทยาศาสตร์', curriculum:'วิทยาศาสตร์', reviewStatus:'pending', intent:'nominate'},
-               {studentId:'64000002', studentName:'นางสาวขยัน หมั่นเพียร', department:'สำนักวิชาพยาบาลศาสตร์', curriculum:'พยาบาลศาสตร์', reviewStatus:'reviewed', intent:'nominate'},
+               {
+                   studentId:'64000002', 
+                   studentName:'นางสาวขยัน หมั่นเพียร', 
+                   department:'สำนักวิชาพยาบาลศาสตร์', 
+                   curriculum:'พยาบาลศาสตร์', 
+                   reviewStatus:'reviewed', 
+                   intent:'nominate',
+                   // Mock saved data to show it loads correctly
+                   savedData: {
+                       obs1: 'เอกสารครบถ้วนดี',
+                       obs2: 'ทักษะการจัดการดีเยี่ยม',
+                       obs3: 'สุขภาพแข็งแรง',
+                       summary: 'เห็นควรให้ผ่าน'
+                   }
+               },
                {studentId:'64000003', department:'สำนักวิชาศิลปศาสตร์', intent:'decline'}
            ]
        }), 600)),
@@ -135,7 +148,7 @@
                'สำนักวิชาศิลปศาสตร์': {intent:'decline'}
            }, 
            reviews:[
-               {reviewer:'Dr. Somchai', studentId:'64000002'} // Mock ว่า Dr. Somchai ตรวจคนนี้แล้ว
+               {reviewer:'Dr. Somchai', studentId:'64000002'} 
            ], 
            users:[
                {username:'school', department:'สำนักวิชาวิทยาศาสตร์', role:'Nominator', name:'Staff Sci'}, 
@@ -149,15 +162,12 @@
     // --- HELPER: SCRIPT RUNNER (Adaptive) ---
     const runScript = (funcName, ...args) => {
        return new Promise((resolve, reject) => {
-          // 1. ตรวจสอบว่ามี google.script (รันบน Google Apps Script หรือไม่)
           if (typeof google !== 'undefined' && google.script && google.script.run) {
              google.script.run
                 .withSuccessHandler(resolve)
                 .withFailureHandler(e => resolve({status:'error', message: e.message}))
                 [funcName](...args);
           } else {
-             // 2. ถ้ารันบน Browser ทั่วไป (GitHub Pages) หรือไม่มี GAS_API_URL ให้ใช้ Mock API
-             // แต่ถ้ามี GAS_API_URL ให้ใช้ fetch
              if (GAS_API_URL && !funcName.startsWith('mock')) {
                  const payload = {
                      action: funcName,
@@ -175,7 +185,6 @@
                      else reject(e);
                  });
              } else {
-                 // Fallback to Mock API directly
                  console.log(`[Demo/Mock Mode] Calling ${funcName}`, args);
                  if (mockApi[funcName]) {
                      mockApi[funcName](...args).then(resolve);
@@ -204,7 +213,7 @@
     }
 
     // --- ICONS ---
-    const Icon = ({d, c}) => <svg className={`w-5 h-5 ${c}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={d}></path></svg>;
+    const Icon = ({d, c}) => <svg className={`w-5 h-5 ${c || ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={d}></path></svg>;
     const Icons = {
       Upload: <Icon d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />,
       Check: <Icon d="M5 13l4 4L19 7" c="text-green-600" />,
@@ -613,6 +622,21 @@
 
        useEffect(() => { fetchCandidates(); }, []);
 
+       // --- UPDATED: Populate review data when a candidate is selected ---
+       useEffect(() => {
+           if (sel && sel.savedData) {
+               setRev({
+                   obs1: sel.savedData.obs1 || '',
+                   obs2: sel.savedData.obs2 || '',
+                   obs3: sel.savedData.obs3 || '',
+                   summary: sel.savedData.summary || ''
+               });
+           } else {
+               // Reset if no saved data
+               setRev({ obs1: '', obs2: '', obs3: '', summary: '' });
+           }
+       }, [sel]);
+
        const saveReview = async () => {
           Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
           const payload = { ...rev, studentId: sel.studentId, studentName: sel.studentName, department: sel.department };
@@ -848,7 +872,6 @@
                                <tr key={r} className="hover:bg-gray-50 transition-colors">
                                   <td className="p-3 border font-medium text-gray-800 sticky left-0 bg-white shadow-sm">{f}</td>
                                   {data.committees.map((comm, c) => {
-                                     // comm.name is used for checking review status because apiSaveReview saves 'reviewerName' (which is real name)
                                      const status = getReviewStatus(comm.name, f);
                                      return (
                                         <td key={c} className="p-2 border text-center">
